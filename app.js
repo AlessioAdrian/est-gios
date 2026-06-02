@@ -273,9 +273,10 @@ function atualizarPainelCoordenadorCompleto() {
 }
 
 // 1. Carrega os arquivos pendentes que vieram da Área do Aluno
+// 1. Carrega os arquivos pendentes (VERSÃO ULTRA-PROTEGIDA)
 function carregarDocumentosPendentes() {
     const ulLista = document.getElementById('lista-documentos');
-    if (!ulLista) return; // Proteção caso o elemento não exista no HTML
+    if (!ulLista) return; // Se o elemento não existir, não faz nada e não trava o app
     ulLista.innerHTML = "";
     
     const todosDocumentos = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
@@ -294,17 +295,19 @@ function carregarDocumentosPendentes() {
     }
 
     filtrados.forEach(doc => {
-        const li = document.createElement('li');
-        li.textContent = `[${doc.metaAluno.nome}] - ${doc.nomeOriginalArquivo}`;
-        li.onclick = () => abrirVisualizadorDoEstagio(doc);
-        ulLista.appendChild(li);
+        if (doc && doc.metaAluno) { // Proteção contra dados corrompidos
+            const li = document.createElement('li');
+            li.textContent = `[${doc.metaAluno.nome || 'Sem Nome'}] - ${doc.nomeOriginalArquivo || 'Documento'}`;
+            li.onclick = () => abrirVisualizadorDoEstagio(doc);
+            ulLista.appendChild(li);
+        }
     });
 }
 
-// 2. Carrega a lista histórica de alunos atendidos filtrados por Coordenador
+// 2. Carrega a lista histórica de alunos atendidos (VERSÃO ULTRA-PROTEGIDA)
 function carregarAlunosAtendidos() {
     const ulAtendidos = document.getElementById('lista-alunos-atendidos');
-    if (!ulAtendidos) return; // Proteção
+    if (!ulAtendidos) return; // Se o elemento não existir, não trava o app
     ulAtendidos.innerHTML = "";
 
     const historicoAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
@@ -324,44 +327,13 @@ function carregarAlunosAtendidos() {
     filtrados.forEach(aluno => {
         const li = document.createElement('li');
         li.innerHTML = `
-            <strong>🎓 ${aluno.nome}</strong> (${aluno.curso})<br>
-            <span class="badge-data">✅ Documento: ${aluno.arquivoHomologado}</span>
-            <span class="badge-data">🕒 Atendido em: ${aluno.dataAtendimento}</span>
+            <strong>🎓 ${aluno.nome || 'Aluno'}</strong> (${aluno.curso || 'Geral'})<br>
+            <span class="badge-data">✅ Documento: ${aluno.arquivoHomologado || 'Arquivo'}</span>
+            <span class="badge-data">🕒 Atendido em: ${aluno.dataAtendimento || '--/--/----'}</span>
         `;
         ulAtendidos.appendChild(li);
     });
 }
-// NOVO: 2. Carrega a lista histórica de alunos atendidos filtrados por Coordenador
-function carregarAlunosAtendidos() {
-    const ulAtendidos = document.getElementById('lista-alunos-atendidos');
-    ulAtendidos.innerHTML = "";
-
-    const historicoAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
-    const filtroSelecionado = document.getElementById('filtro-coordenador').value;
-
-    // Filtra o histórico com base no coordenador selecionado
-    const filtrados = historicoAtendidos.filter(aluno => {
-        if (filtroSelecionado === "todos") return true;
-        return aluno.coordenadorId === filtroSelecionado;
-    });
-
-    if (filtrados.length === 0) {
-        ulAtendidos.innerHTML = '<li class="empty-list" style="padding:10px; font-size:0.85rem; color:#64748b;">Nenhum aluno atendido ainda.</li>';
-        return;
-    }
-
-    // Exibe os alunos que já tiveram seus PDFs assinados e baixados
-    filtrados.forEach(aluno => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <strong>🎓 ${aluno.nome}</strong> (${aluno.curso})<br>
-            <span class="badge-data">✅ Documento: ${aluno.arquivoHomologado}</span>
-            <span class="badge-data">🕒 Atendido em: ${aluno.dataAtendimento}</span>
-        `;
-        ulAtendidos.appendChild(li);
-    });
-}
-
 function fecharPainelDeVisualizacao() {
     document.getElementById('pdf-preview').classList.add('hidden');
     document.getElementById('btn-baixar').classList.add('hidden');
