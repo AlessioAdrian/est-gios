@@ -70,17 +70,17 @@ function configurarOuvinteUploadCarimbo() {
 // Sistema Central de chaveamento de telas com Barreira de Senha
 // Sistema Central de chaveamento de telas com Barreira de Senha (VERSÃO BLINDADA)
 // Sistema Central de chaveamento de telas com Barreira de Senha (VERSÃO BLINDADA)
+    // 1. Chaveamento de Telas ULTRA-SEGURO
 function switchView(view) {
-    // Esconde todas as seções
-    const secoes = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
-    secoes.forEach(id => {
-        const el = document.getElementById(id);
+    // Esconde TUDO primeiro
+    const views = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
+    views.forEach(v => {
+        const el = document.getElementById(v);
         if (el) el.classList.add('hidden');
     });
 
     if (view === 'aluno') {
-        const elAluno = document.getElementById('view-aluno');
-        if (elAluno) elAluno.classList.remove('hidden');
+        document.getElementById('view-aluno').classList.remove('hidden');
     } else {
         viewDesejadaEmAguardo = view;
         const autenticado = sessionStorage.getItem(`sessao_auth_${view}`) === 'true';
@@ -89,28 +89,79 @@ function switchView(view) {
             const elDestino = document.getElementById(`view-${view}`);
             if (elDestino) elDestino.classList.remove('hidden');
             
-            // Tenta carregar os dados específicos de cada painel sem deixar travar a tela
+            // Tenta carregar os dados, mas se der erro, não trava a tela
             try {
                 if (view === 'coordenador') {
+                    // Importante: Popular o select antes de carregar as listas
+                    atualizarComponentesSelecaoCoordenadores();
                     atualizarPainelCoordenadorCompleto();
                 }
-                if (view === 'admin') {
-                    carregarListaAdminCoordenadores();
-                }
-            } catch (err) {
-                console.error(`Erro ao carregar dados da visão ${view}:`, err);
-            }
+                if (view === 'admin') carregarListaAdminCoordenadores();
+            } catch (e) { console.error("Erro ao carregar dados:", e); }
         } else {
-            const elTitulo = document.getElementById('login-titulo');
-            if (elTitulo) elTitulo.textContent = `Acesso Protegido: ${view.toUpperCase()}`;
-            
-            const elLogin = document.getElementById('view-login');
-            if (elLogin) elLogin.classList.remove('hidden');
-            
-            const elSenha = document.getElementById('senha-acesso');
-            if (elSenha) elSenha.value = "";
+            document.getElementById('login-titulo').textContent = `Acesso: ${view.toUpperCase()}`;
+            document.getElementById('view-login').classList.remove('hidden');
         }
     }
+}
+
+// 2. Função Mestre do Coordenador (Com proteção contra erros)
+function atualizarPainelCoordenadorCompleto() {
+    console.log("Atualizando painel...");
+    try {
+        carregarDocumentosPendentes();
+        carregarAlunosAtendidos();
+    } catch (err) {
+        console.error("Falha ao atualizar painel:", err);
+    }
+}
+
+function carregarDocumentosPendentes() {
+    const ul = document.getElementById('lista-documentos');
+    if (!ul) return;
+    ul.innerHTML = "";
+
+    const docs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
+    const filtro = document.getElementById('filtro-coordenador');
+    const valorFiltro = filtro ? filtro.value : "todos";
+
+    const filtrados = docs.filter(d => valorFiltro === "todos" || d.coordenadorDestinatarioId === valorFiltro);
+
+    if (filtrados.length === 0) {
+        ul.innerHTML = '<li style="color:gray; padding:10px;">Nenhum pendente</li>';
+        return;
+    }
+
+    filtrados.forEach(doc => {
+        const li = document.createElement('li');
+        li.textContent = `${doc.metaAluno.nome} - ${doc.nomeOriginalArquivo}`;
+        li.style.cursor = "pointer";
+        li.onclick = () => abrirVisualizadorDoEstagio(doc);
+        ul.appendChild(li);
+    });
+}
+
+function carregarAlunosAtendidos() {
+    const ul = document.getElementById('lista-alunos-atendidos');
+    if (!ul) return;
+    ul.innerHTML = "";
+
+    const atendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
+    const filtro = document.getElementById('filtro-coordenador');
+    const valorFiltro = filtro ? filtro.value : "todos";
+
+    const filtrados = atendidos.filter(a => valorFiltro === "todos" || a.coordenadorId === valorFiltro);
+
+    if (filtrados.length === 0) {
+        ul.innerHTML = '<li style="color:gray; padding:10px;">Nenhum atendido</li>';
+        return;
+    }
+
+    filtrados.forEach(a => {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${a.nome}</strong><br><small>${a.dataAtendimento}</small>`;
+        ul.appendChild(li);
+    });
 }
 
 // Validador do formulário de senhas
