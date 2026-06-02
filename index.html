@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Estágio PWA</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <h1>📄 Gestão de Documentos de Estágio</h1>
+        <div class="role-selector">
+            <button onclick="switchView('aluno')">Área do Aluno</button>
+            <button onclick="switchView('coordenador')">Área do Coordenador</button>
+            <button onclick="switchView('admin')">Área do Admin</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="view-aluno" class="view-section">
+            <h2>Enviar Documentos para Validação</h2>
+            <div class="card text-left">
+                <div class="form-group">
+                    <label for="aluno-nome">Nome Completo:</label>
+                    <input type="text" id="aluno-nome" placeholder="Digite seu nome completo">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="aluno-telefone">Telefone / WhatsApp:</label>
+                        <input type="tel" id="aluno-telefone" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-group">
+                        <label for="aluno-registro">RA ou CPF:</label>
+                        <input type="text" id="aluno-registro" placeholder="Digite seu RA ou CPF">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="aluno-curso">Curso:</label>
+                        <input type="text" id="aluno-curso" placeholder="Ex: Engenharia de Software">
+                    </div>
+                    <div class="form-group">
+                        <label for="aluno-local">Local do Estágio (Empresa):</label>
+                        <input type="text" id="aluno-local" placeholder="Ex: Google Brasil">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="aluno-coordenador-select">Selecione o Coordenador do seu Curso:</label>
+                    <select id="aluno-coordenador-select">
+                        </select>
+                </div>
+
+                <label for="pdf-input" class="drop-zone">
+                    <span>Clique aqui ou arraste os PDFs do seu estágio</span>
+                    <input type="file" id="pdf-input" accept="application/pdf" multiple>
+                </label>
+                <ul id="lista-arquivos-selecionados"></ul>
+                <button id="btn-enviar" class="btn-primary" style="width: 100%; margin-top: 15px;">Enviar ao Coordenador</button>
+            </div>
+        </section>
+
+        <section id="view-login" class="view-section hidden">
+            <h2 id="login-titulo">Acesso Restrito</h2>
+            <div class="card card-login">
+                <p>Por favor, insira a senha de acesso.</p>
+                <input type="password" id="senha-acesso" placeholder="Digite a senha...">
+                <button id="btn-login" class="btn-primary">Entrar</button>
+            </div>
+        </section>
+
+        <section id="view-admin" class="view-section hidden">
+            <div class="header-interno">
+                <h2>Painel do Administrador</h2>
+                <button onclick="logout()" class="btn-danger">Sair do Admin</button>
+            </div>
+            <div class="admin-container">
+                <div class="card text-left">
+                    <h3>Cadastrar Novo Coordenador</h3>
+                    <div class="form-group">
+                        <label for="admin-nome-coord">Nome do Coordenador:</label>
+                        <input type="text" id="admin-nome-coord" placeholder="Ex: Prof. Dr. Marcos">
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-curso-coord">Curso Responsável:</label>
+                        <input type="text" id="admin-curso-coord" placeholder="Ex: Administração">
+                    </div>
+                    <button id="btn-cadastrar-coord" class="btn-primary">Adicionar Coordenador</button>
+                </div>
+                <div class="card">
+                    <h3>Coordenadores Ativos</h3>
+                    <ul id="lista-coordenadores-cadastrados" class="lista-clean"></ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="view-coordenador" class="view-section hidden">
+           <section id="view-coordenador" class="view-section hidden">
+            <div class="header-interno">
+                <h2>Painel do Coordenador</h2>
+                <button onclick="logout()" class="btn-danger">Sair do Painel</button>
+            </div>
+
+            <div class="filtro-container">
+                <label for="filtro-coordenador">Visualizar dados do Coordenador:</label>
+                <select id="filtro-coordenador" onchange="atualizarPainelCoordenadorCompleto()">
+                    </select>
+            </div>
+            
+            <div class="coordenador-container">
+                <div class="sidebar">
+                    <div class="sidebar-block">
+                        <h3>Documentos Recebidos</h3>
+                        <ul id="lista-documentos"></ul>
+                    </div>
+
+                    <div class="sidebar-block" style="margin-top: 1.5rem;">
+                        <h3 style="background-color: #16a34a; color: white;">Alunos Atendidos</h3>
+                        <ul id="lista-alunos-atendidos" class="lista-atendidos"></ul>
+                    </div>
+                </div>
+                
+                <div class="preview-area">
+                    <h3>Visualização e Assinatura</h3>
+
+                    <div class="carimbo-config-box">
+                        <label><strong>Upload do seu Carimbo institucional (Apenas .JPG ou .JPEG):</strong></label>
+                        <input type="file" id="coordenador-carimbo-img" accept="image/jpeg, image/jpg">
+                    </div>
+
+                    <div id="dados-aluno-preview" class="hidden"></div>
+
+                    <div id="pdf-render-container">
+                        <iframe id="pdf-preview" class="hidden"></iframe>
+                    </div>
+                    <button id="btn-baixar" class="btn-success hidden">Aplicar Carimbo JPG e Baixar</button>
+                </div>
+            </div>
+        
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>
