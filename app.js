@@ -1,507 +1,406 @@
-// Senhas de Controle de Acesso
-const SENHAS_SISTEMA = {
-    coordenador: "1234",
-    admin: "admin99"
+// Configurações Globais e Senhas
+const CONFIG = {
+    senhaCoordenador: "1234",
+    senhaAdmin: "admin99"
 };
 
-let viewDesejadaEmAguardo = "";
-let imagemCarimboGlobalBase64 = localStorage.getItem('imgCarimboCoordenador') || null;
+let viewPendenteAutenticacao = "";
+let cacheCarimboBase64 = localStorage.getItem('imgCarimboCoordenador') || null;
+let documentoSelecionadoParaCarimbo = null;
+let filaTemporariaArquivosAluno = [];
 
-// Inicialização Geral do Sistema
+// Evento disparado assim que o documento HTML carrega completamente
 document.addEventListener("DOMContentLoaded", () => {
-    configurarCargaInicialCoordenadores();
-    atualizarComponentesSelecaoCoordenadores();
-    configurarOuvinteUploadCarimbo();
+    garantirDadosIniciaisDoSistema();
+    sincronizarListasDeCoordenadores();
+    inicializarOuvintesDeEventos();
     switchView('aluno');
 });
 
-// Mock Inicial de Coordenadores (Evita vir vazio no primeiro acesso)
-function configurarCargaInicialCoordenadores() {
-    let existentes = JSON.parse(localStorage.getItem('bancoCoordenadores'));
-    if (!existentes || existentes.length === 0) {
-        existentes = [
-            { id: "coord-1", nome: "Prof. Dr. Alberto Santos", curso: "Engenharia de Software" },
-            { id: "coord-2", nome: "Profa. Msc. Mariana Costa", curso: "Administração" }
+// Impede que o LocalStorage comece nulo (o que quebrava o script na Vercel)
+function garantirDadosIniciaisDoSistema() {
+    let coordsAtivos = localStorage.getItem('bancoCoordenadores');
+    if (!coordsAtivos) {
+        const mockInicial = [
+            { id: "coord-padrao-1", nome: "Coordenador Geral de Estágios", curso: "Geral" }
         ];
-        localStorage.setItem('bancoCoordenadores', JSON.stringify(existentes));
+        localStorage.setItem('bancoCoordenadores', JSON.stringify(mockInicial));
+    }
+    
+    if (!localStorage.getItem('bancoDocumentosEstagio')) {
+        localStorage.setItem('bancoDocumentosEstagio', JSON.stringify([]));
+    }
+    if (!localStorage.getItem('bancoAlunosAtendidos')) {
+        localStorage.setItem('bancoAlunosAtendidos', JSON.stringify([]));
     }
 }
 
-// Sincroniza os selects do aluno e da área de filtros do coordenador
-function atualizarComponentesSelecaoCoordenadores() {
-    const listaCoords = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
+// Sincroniza todas as caixas de seleção (Selects) de coordenadores na tela
+function sincronizarListasDeCoordenadores() {
+    const lista = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
+    
     const selectAluno = document.getElementById('aluno-coordenador-select');
     const selectFiltroCoord = document.getElementById('filtro-coordenador');
-    
-    selectAluno.innerHTML = "";
-    selectFiltroCoord.innerHTML = '<option value="todos">-- Exibir Todos os Coordenadores --</option>';
 
-    listaCoords.forEach(c => {
-        const itemAluno = new Option(`${c.nome} (${c.curso})`, c.id);
-        selectAluno.add(itemAluno);
+    if (selectAluno) {
+        selectAluno.innerHTML = "";
+        lista.forEach(c => {
+            selectAluno.add(new Option(`${c.nome} (${c.curso})`, c.id));
+        });
+    }
 
-        const itemFiltro = new Option(c.nome, c.id);
-        selectFiltroCoord.add(itemFiltro);
-    });
-}
-
-// Configuração do Capturador de Imagem JPG para o carimbo do coordenador
-function configurarOuvinteUploadCarimbo() {
-    const inputCarimbo = document.getElementById('coordenador-carimbo-img');
-    if (inputCarimbo) {
-        inputCarimbo.addEventListener('change', (e) => {
-            const arquivo = e.target.files[0];
-            if (arquivo && (arquivo.type === "image/jpeg" || arquivo.type === "image/jpg")) {
-                const leitor = new FileReader();
-                leitor.onload = function () {
-                    imagemCarimboGlobalBase64 = leitor.result;
-                    localStorage.setItem('imgCarimboCoordenador', imagemCarimboGlobalBase64);
-                    alert("Carimbo JPG configurado com sucesso e salvo para uso!");
-                };
-                leitor.readAsDataURL(arquivo);
-            } else {
-                alert("Formato Inválido! Selecione exclusivamente uma imagem .JPG ou .JPEG");
-                e.target.value = "";
-            }
+    if (selectFiltroCoord) {
+        selectFiltroCoord.innerHTML = '<option value="todos">-- Exibir Todos os Coordenadores --</option>';
+        lista.forEach(c => {
+            selectFiltroCoord.add(new Option(c.nome, c.id));
         });
     }
 }
 
-// Sistema Central de chaveamento de telas com Barreira de Senha
-// Sistema Central de chaveamento de telas com Barreira de Senha (VERSÃO BLINDADA)
-// Sistema Central de chaveamento de telas com Barreira de Senha (VERSÃO BLINDADA)
-    // 1. Chaveamento de Telas ULTRA-SEGURO
-function switchView(view) {
-    // Esconde TUDO primeiro
-    const views = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
-    views.forEach(v => {
-        const el = document.getElementById(v);
-        if (el) el.classList.add('hidden');
+// Vincula funções aos botões e inputs sem risco de colisão de escopo
+function inicializarOuvintesDeEventos() {
+    // Input de arquivos do Aluno
+    const inputPdf = document.getElementById('pdf-input');
+    if (inputPdf) {
+        inputPdf.addEventListener('change', (e) => {
+            const validos = Array.from(e.target.files).filter(f => f.type === "application/pdf");
+            filaTemporariaArquivosAluno = filaTemporariaArquivosAluno.concat(validos);
+            
+            const display = document.getElementById('lista-arquivos-selecionados');
+            if (display) {
+                display.innerHTML = "";
+                filaTemporariaArquivosAluno.forEach(f => {
+                    const li = document.createElement('li');
+                    li.textContent = `📎 PDF Selecionado: ${f.name}`;
+                    display.appendChild(li);
+                });
+            }
+        });
+    }
+
+    // Botão de envio do Aluno
+    const btnEnviar = document.getElementById('btn-enviar');
+    if (btnEnviar) {
+        btnEnviar.addEventListener('click', processarEnvioDocumentosAluno);
+    }
+
+    // Validador de Senha (Login)
+    const btnLogin = document.getElementById('btn-login');
+    if (btnLogin) {
+        btnLogin.addEventListener('click', executarAutenticacaoPainel);
+    }
+
+    // Cadastro de Coordenador no Admin
+    const btnCadastrarCoord = document.getElementById('btn-cadastrar-coord');
+    if (btnCadastrarCoord) {
+        btnCadastrarCoord.addEventListener('click', processarCadastroNovoCoordenador);
+    }
+
+    // Upload de Carimbo do Coordenador
+    const inputCarimbo = document.getElementById('coordenador-carimbo-img');
+    if (inputCarimbo) {
+        inputCarimbo.addEventListener('change', processarUploadImagemCarimbo);
+    }
+
+    // Filtro de Coordenador
+    const selectFiltro = document.getElementById('filtro-coordenador');
+    if (selectFiltro) {
+        selectFiltro.addEventListener('change', atualizarListasDoPainelCoordenador);
+    }
+
+    // Botão de aplicar carimbo e baixar
+    const btnBaixar = document.getElementById('btn-baixar');
+    if (btnBaixar) {
+        btnBaixar.addEventListener('click', processarInjecaoCarimboEBaixarPDF);
+    }
+}
+
+// Gerenciador de Navegação (Chaveamento de Telas)
+function switchView(nomeView) {
+    const blocosViews = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
+    blocosViews.forEach(id => {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.classList.add('hidden');
     });
 
-    if (view === 'aluno') {
-        document.getElementById('view-aluno').classList.remove('hidden');
+    if (nomeView === 'aluno') {
+        const tela = document.getElementById('view-aluno');
+        if (tela) tela.classList.remove('hidden');
     } else {
-        viewDesejadaEmAguardo = view;
-        const autenticado = sessionStorage.getItem(`sessao_auth_${view}`) === 'true';
+        viewPendenteAutenticacao = nomeView;
+        const jaAutenticado = sessionStorage.getItem(`sessao_auth_${nomeView}`) === 'true';
 
-        if (autenticado) {
-            const elDestino = document.getElementById(`view-${view}`);
-            if (elDestino) elDestino.classList.remove('hidden');
+        if (jaAutenticado) {
+            const telaDestino = document.getElementById(`view-${nomeView}`);
+            if (telaDestino) telaDestino.classList.remove('hidden');
             
-            // Tenta carregar os dados, mas se der erro, não trava a tela
-            try {
-                if (view === 'coordenador') {
-                    // Importante: Popular o select antes de carregar as listas
-                    atualizarComponentesSelecaoCoordenadores();
-                    atualizarPainelCoordenadorCompleto();
-                }
-                if (view === 'admin') carregarListaAdminCoordenadores();
-            } catch (e) { console.error("Erro ao carregar dados:", e); }
+            // Executa rotinas de carregamento de dados da tela aberta
+            if (nomeView === 'coordenador') atualizarListasDoPainelCoordenador();
+            if (nomeView === 'admin') renderizarListaAdminCoordenadores();
         } else {
-            document.getElementById('login-titulo').textContent = `Acesso: ${view.toUpperCase()}`;
-            document.getElementById('view-login').classList.remove('hidden');
+            const tituloLogin = document.getElementById('login-titulo');
+            if (tituloLogin) tituloLogin.textContent = `Acesso Controlado: Painel ${nomeView.toUpperCase()}`;
+            
+            const telaLogin = document.getElementById('view-login');
+            if (telaLogin) telaLogin.classList.remove('hidden');
+            
+            const campoSenha = document.getElementById('senha-acesso');
+            if (campoSenha) campoSenha.value = "";
         }
     }
 }
 
-// 2. Função Mestre do Coordenador (Com proteção contra erros)
-function atualizarPainelCoordenadorCompleto() {
-    console.log("Atualizando painel...");
-    try {
-        carregarDocumentosPendentes();
-        carregarAlunosAtendidos();
-    } catch (err) {
-        console.error("Falha ao atualizar painel:", err);
-    }
-}
+// Validador de credenciais de acesso
+function executarAutenticacaoPainel() {
+    const senhaDigitada = document.getElementById('senha-acesso').value;
+    const senhaCorreta = (viewPendenteAutenticacao === 'admin') ? CONFIG.senhaAdmin : CONFIG.senhaCoordenador;
 
-function carregarDocumentosPendentes() {
-    const ul = document.getElementById('lista-documentos');
-    if (!ul) return;
-    ul.innerHTML = "";
-
-    const docs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-    const filtro = document.getElementById('filtro-coordenador');
-    const valorFiltro = filtro ? filtro.value : "todos";
-
-    const filtrados = docs.filter(d => valorFiltro === "todos" || d.coordenadorDestinatarioId === valorFiltro);
-
-    if (filtrados.length === 0) {
-        ul.innerHTML = '<li style="color:gray; padding:10px;">Nenhum pendente</li>';
-        return;
-    }
-
-    filtrados.forEach(doc => {
-        const li = document.createElement('li');
-        li.textContent = `${doc.metaAluno.nome} - ${doc.nomeOriginalArquivo}`;
-        li.style.cursor = "pointer";
-        li.onclick = () => abrirVisualizadorDoEstagio(doc);
-        ul.appendChild(li);
-    });
-}
-
-function carregarAlunosAtendidos() {
-    const ul = document.getElementById('lista-alunos-atendidos');
-    if (!ul) return;
-    ul.innerHTML = "";
-
-    const atendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
-    const filtro = document.getElementById('filtro-coordenador');
-    const valorFiltro = filtro ? filtro.value : "todos";
-
-    const filtrados = atendidos.filter(a => valorFiltro === "todos" || a.coordenadorId === valorFiltro);
-
-    if (filtrados.length === 0) {
-        ul.innerHTML = '<li style="color:gray; padding:10px;">Nenhum atendido</li>';
-        return;
-    }
-
-    filtrados.forEach(a => {
-        const li = document.createElement('li');
-        li.innerHTML = `<strong>${a.nome}</strong><br><small>${a.dataAtendimento}</small>`;
-        ul.appendChild(li);
-    });
-}
-
-// Validador do formulário de senhas
-document.getElementById('btn-login').addEventListener('click', () => {
-    const inputSenha = document.getElementById('senha-acesso').value;
-    if (inputSenha === SENHAS_SISTEMA[viewDesejadaEmAguardo]) {
-        sessionStorage.setItem(`sessao_auth_${viewDesejadaEmAguardo}`, 'true');
-        switchView(viewDesejadaEmAguardo);
+    if (senhaDigitada === senhaCorreta) {
+        sessionStorage.setItem(`sessao_auth_${viewPendenteAutenticacao}`, 'true');
+        switchView(viewPendenteAutenticacao);
     } else {
-        alert("Senha incorreta! Verifique as credenciais.");
+        alert("Senha incorreta! Verifique os dados de acesso.");
     }
-});
+}
 
 function logout() {
-    sessionStorage.removeItem(`sessao_auth_${viewDesejadaEmAguardo}`);
+    sessionStorage.removeItem(`sessao_auth_${viewPendenteAutenticacao}`);
     switchView('aluno');
 }
 
+// Ações do Aluno
+async function processarEnvioDocumentosAluno() {
+    const nome = document.getElementById('aluno-nome').value.trim();
+    const telefone = document.getElementById('aluno-telefone').value.trim();
+    const registro = document.getElementById('aluno-registro').value.trim();
+    const curso = document.getElementById('aluno-curso').value.trim();
+    const local = document.getElementById('aluno-local').value.trim();
+    const selectCoord = document.getElementById('aluno-coordenador-select');
+    const idCoordenador = selectCoord ? selectCoord.value : "";
 
-// --- LÓGICA DO PAINEL ADMIN ---
-document.getElementById('btn-cadastrar-coord').addEventListener('click', () => {
+    if (!nome || !registro || !idCoordenador || filaTemporariaArquivosAluno.length === 0) {
+        alert("Atenção: Nome, RA/CPF, Coordenador e pelo menos 1 arquivo PDF são obrigatórios!");
+        return;
+    }
+
+    let bancoDocs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
+
+    const lerArquivoParaBase64 = (file) => new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+    });
+
+    for (let file of filaTemporariaArquivosAluno) {
+        const base64 = await lerArquivoParaBase64(file);
+        bancoDocs.push({
+            idDocumento: "doc-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+            nomeOriginalArquivo: file.name,
+            pdfDadosBase64: base64,
+            coordenadorDestinatarioId: idCoordenador,
+            metaAluno: { nome, telefone, registro, curso, local }
+        });
+    }
+
+    localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(bancoDocs));
+    alert(`Sucesso! ${filaTemporariaArquivosAluno.length} documento(s) enviado(s) para análise.`);
+    
+    // Reset de formulário
+    filaTemporariaArquivosAluno = [];
+    document.getElementById('lista-arquivos-selecionados').innerHTML = "";
+    document.getElementById('pdf-input').value = "";
+    document.getElementById('aluno-nome').value = "";
+    document.getElementById('aluno-registro').value = "";
+    document.getElementById('aluno-telefone').value = "";
+    document.getElementById('aluno-curso').value = "";
+    document.getElementById('aluno-local').value = "";
+}
+
+// Ações do Administrador
+function processarCadastroNovoCoordenador() {
     const nome = document.getElementById('admin-nome-coord').value.trim();
     const curso = document.getElementById('admin-curso-coord').value.trim();
 
-    if (!nome || !curso) return alert("Por favor, preencha todos os campos cadastrais.");
+    if (!nome || !curso) {
+        alert("Preencha todos os campos do coordenador.");
+        return;
+    }
 
     let banco = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
     banco.push({ id: "coord-" + Date.now(), nome, curso });
     localStorage.setItem('bancoCoordenadores', JSON.stringify(banco));
 
-    alert("Coordenador adicionado com sucesso!");
+    alert("Coordenador cadastrado!");
     document.getElementById('admin-nome-coord').value = "";
     document.getElementById('admin-curso-coord').value = "";
     
-    carregarListaAdminCoordenadores();
-    atualizarComponentesSelecaoCoordenadores();
-});
+    renderListaAdminCoordenadores();
+    sincronizarListasDeCoordenadores();
+}
 
-function carregarListaAdminCoordenadores() {
+function renderizarListaAdminCoordenadores() {
     const ul = document.getElementById('lista-coordenadores-cadastrados');
+    if (!ul) return;
     ul.innerHTML = "";
-    const dados = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
-
-    dados.forEach(c => {
+    const lista = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
+    lista.forEach(c => {
         const li = document.createElement('li');
         li.textContent = `💼 ${c.nome} [Curso: ${c.curso}]`;
         ul.appendChild(li);
     });
 }
 
+// Ações do Coordenador
+function atualizarListasDoPainelCoordenador() {
+    const elFiltro = document.getElementById('filtro-coordenador');
+    const filtro = elFiltro ? elFiltro.value : "todos";
 
-// --- LÓGICA DO PAINEL ALUNO (ENVIO MÚLTIPLO + DADOS) ---
-// --- LÓGICA DO PAINEL ALUNO (CORRIGIDA E BLINDADA) ---
-let filaArquivosUpload = [];
-const inputPdfs = document.getElementById('pdf-input');
-const interfaceFilaDisplay = document.getElementById('lista-arquivos-selecionados');
+    // 1. Renderizar Pendentes
+    const ulPendentes = document.getElementById('lista-documentos');
+    if (ulPendentes) {
+        ulPendentes.innerHTML = "";
+        const todosDocs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
+        const filtrados = todosDocs.filter(d => filtro === "todos" || d.coordenadorDestinatarioId === filtro);
 
-if (inputPdfs) {
-    inputPdfs.addEventListener('change', (e) => {
-        const arquivosPreSelecionados = Array.from(e.target.files);
-        const apenasPdfs = arquivosPreSelecionados.filter(f => f.type === "application/pdf");
-        filaArquivosUpload = filaArquivosUpload.concat(apenasPdfs);
-        
-        interfaceFilaDisplay.innerHTML = "";
-        filaArquivosUpload.forEach(f => {
-            const li = document.createElement('li');
-            li.textContent = `📎 PDF Pronto: ${f.name}`;
-            interfaceFilaDisplay.appendChild(li);
-        });
-    });
-}
-
-// Ouvinte do botão de envio com validações robustas
-const btnEnviar = document.getElementById('btn-enviar');
-if (btnEnviar) {
-    btnEnviar.addEventListener('click', async () => {
-        try {
-            const nome = document.getElementById('aluno-nome').value.trim();
-            const telefone = document.getElementById('aluno-telefone').value.trim();
-            const registro = document.getElementById('aluno-registro').value.trim();
-            const curso = document.getElementById('aluno-curso').value.trim();
-            const local = document.getElementById('aluno-local').value.trim();
-            const selectCoordenador = document.getElementById('aluno-coordenador-select');
-            
-            const idCoordenadorDestino = selectCoordenador ? selectCoordenador.value : "";
-
-            // Verifica se os campos obrigatórios foram preenchidos
-            if (!nome || !registro) {
-                alert("Erro: Nome e RA/CPF são obrigatórios!");
-                return;
-            }
-
-            // Verifica se há um coordenador selecionado
-            if (!idCoordenadorDestino) {
-                alert("Erro: Você precisa selecionar um Coordenador! Se a lista estiver vazia, acesse a Área do Admin e cadastre um coordenador primeiro.");
-                return;
-            }
-
-            // Verifica se há arquivos na fila
-            if (filaArquivosUpload.length === 0) {
-                alert("Erro: Selecione pelo menos 1 arquivo PDF para enviar!");
-                return;
-            }
-
-            let bancoEstagios = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-
-            const converterParaBase64 = (arquivoItem) => new Promise((sucesso, rejeito) => {
-                const reader = new FileReader(); 
-                reader.onload = () => sucesso(reader.result); 
-                reader.onerror = (err) => rejeito(err);
-                reader.readAsDataURL(arquivoItem);
+        if (filtrados.length === 0) {
+            ulPendentes.innerHTML = '<li style="color:#64748b; padding:10px; font-size:0.85rem;">Nenhum pendente.</li>';
+            fecharAreaDePreviewCoordenador();
+        } else {
+            filtrados.forEach(doc => {
+                const li = document.createElement('li');
+                li.textContent = `[${doc.metaAluno.nome}] - ${doc.nomeOriginalArquivo}`;
+                li.style.cursor = "pointer";
+                li.onclick = () => carregarPreviewDocumentoEstagio(doc);
+                ulPendentes.appendChild(li);
             });
-
-            // Processa e converte todos os arquivos da fila
-            for (let arquivo of filaArquivosUpload) {
-                const base64Convertido = await converterParaBase64(arquivo);
-                bancoEstagios.push({
-                    idDocumento: "doc-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9),
-                    nomeOriginalArquivo: arquivo.name,
-                    pdfDadosBase64: base64Convertido,
-                    coordenadorDestinatarioId: idCoordenadorDestino,
-                    metaAluno: { nome, telefone, registro, curso, local }
-                });
-            }
-
-            localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(bancoEstagios));
-            alert(`Sucesso! ${filaArquivosUpload.length} documento(s) enviado(s) para o coordenador.`);
-            
-            // Limpeza e reset do formulário após o sucesso
-            filaArquivosUpload = [];
-            if (interfaceFilaDisplay) interfaceFilaDisplay.innerHTML = "";
-            if (inputPdfs) inputPdfs.value = "";
-            
-            document.getElementById('aluno-nome').value = "";
-            document.getElementById('aluno-telefone').value = "";
-            document.getElementById('aluno-registro').value = "";
-            document.getElementById('aluno-curso').value = "";
-            document.getElementById('aluno-local').value = "";
-
-        } catch (error) {
-            console.error("Erro no processo de envio:", error);
-            alert("Ocorreu um erro interno ao processar os arquivos. Verifique o console do navegador.");
         }
-    });
-}
-
-// --- LÓGICA DO PAINEL DO COORDENADOR (FILTRAGEM + CARIMBO REAL JPG) ---
-// --- LÓGICA DO PAINEL DO COORDENADOR (FILTRAGEM, HISTÓRICO E CARIMBO JPG) ---
-// --- LÓGICA DO PAINEL DO COORDENADOR (FILTRAGEM, HISTÓRICO E CARIMBO JPG) ---
-let docAtivoEmFoco = null;
-
-// ATENÇÃO: Esta função deve ficar no topo deste bloco para o JavaScript achá-la logo
-function atualizarPainelCoordenadorCompleto() {
-    try {
-        carregarDocumentosPendentes();
-        carregarAlunosAtendidos();
-    } catch (e) {
-        console.error("Erro ao atualizar o painel completo do coordenador:", e);
-    }
-}
-
-// 1. Carrega os arquivos pendentes que vieram da Área do Aluno
-// 1. Carrega os arquivos pendentes (VERSÃO ULTRA-PROTEGIDA)
-function carregarDocumentosPendentes() {
-    const ulLista = document.getElementById('lista-documentos');
-    if (!ulLista) return; // Se o elemento não existir, não faz nada e não trava o app
-    ulLista.innerHTML = "";
-    
-    const todosDocumentos = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-    const elFiltro = document.getElementById('filtro-coordenador');
-    const filtroSelecionado = elFiltro ? elFiltro.value : "todos";
-
-    const filtrados = todosDocumentos.filter(doc => {
-        if (filtroSelecionado === "todos") return true;
-        return doc.coordenadorDestinatarioId === filtroSelecionado;
-    });
-
-    if (filtrados.length === 0) {
-        ulLista.innerHTML = '<li class="empty-list" style="padding:10px; font-size:0.85rem; color:#64748b;">Nenhum pendente.</li>';
-        fecharPainelDeVisualizacao();
-        return;
     }
 
-    filtrados.forEach(doc => {
-        if (doc && doc.metaAluno) { // Proteção contra dados corrompidos
-            const li = document.createElement('li');
-            li.textContent = `[${doc.metaAluno.nome || 'Sem Nome'}] - ${doc.nomeOriginalArquivo || 'Documento'}`;
-            li.onclick = () => abrirVisualizadorDoEstagio(doc);
-            ulLista.appendChild(li);
-        }
-    });
-}
-
-// 2. Carrega a lista histórica de alunos atendidos (VERSÃO ULTRA-PROTEGIDA)
-function carregarAlunosAtendidos() {
+    // 2. Renderizar Atendidos
     const ulAtendidos = document.getElementById('lista-alunos-atendidos');
-    if (!ulAtendidos) return; // Se o elemento não existir, não trava o app
-    ulAtendidos.innerHTML = "";
+    if (ulAtendidos) {
+        ulAtendidos.innerHTML = "";
+        const todosAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
+        const filtradosAtendidos = todosAtendidos.filter(a => filtro === "todos" || a.coordenadorId === filtro);
 
-    const historicoAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
-    const elFiltro = document.getElementById('filtro-coordenador');
-    const filtroSelecionado = elFiltro ? elFiltro.value : "todos";
+        if (filtradosAtendidos.length === 0) {
+            ulAtendidos.innerHTML = '<li style="color:#64748b; padding:10px; font-size:0.85rem;">Nenhum histórico.</li>';
+        } else {
+            filtradosAtendidos.forEach(aluno => {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>🎓 ${aluno.nome}</strong><br><span style="font-size:0.75rem; color:#166534;">✅ ${aluno.arquivoHomologado} (${aluno.dataAtendimento})</span>`;
+                ulAtendidos.appendChild(li);
+            });
+        }
+    }
+}
 
-    const filtrados = historicoAtendidos.filter(aluno => {
-        if (filtroSelecionado === "todos") return true;
-        return aluno.coordenadorId === filtroSelecionado;
-    });
+function fecharAreaDePreviewCoordenador() {
+    const pdf = document.getElementById('pdf-preview');
+    const btn = document.getElementById('btn-baixar');
+    const dados = document.getElementById('dados-aluno-preview');
+    if (pdf) pdf.classList.add('hidden');
+    if (btn) btn.classList.add('hidden');
+    if (dados) dados.classList.add('hidden');
+    documentoSelecionadoParaCarimbo = null;
+}
 
-    if (filtrados.length === 0) {
-        ulAtendidos.innerHTML = '<li class="empty-list" style="padding:10px; font-size:0.85rem; color:#64748b;">Nenhum aluno atendido ainda.</li>';
+function carregarPreviewDocumentoEstagio(doc) {
+    documentoSelecionadoParaCarimbo = doc;
+    
+    const dados = document.getElementById('dados-aluno-preview');
+    if (dados) {
+        dados.innerHTML = `
+            <strong>ALUNO:</strong> ${doc.metaAluno.nome} | <strong>RA/CPF:</strong> ${doc.metaAluno.registro}<br>
+            <strong>CURSO:</strong> ${doc.metaAluno.curso} | <strong>EMPRESA:</strong> ${doc.metaAluno.local}
+        `;
+        dados.classList.remove('hidden');
+    }
+
+    const preview = document.getElementById('pdf-preview');
+    if (preview) {
+        preview.src = doc.pdfDadosBase64;
+        preview.classList.remove('hidden');
+    }
+
+    const btn = document.getElementById('btn-baixar');
+    if (btn) btn.classList.remove('hidden');
+}
+
+function processarUploadImagemCarimbo(e) {
+    const file = e.target.files[0];
+    if (file && (file.type === "image/jpeg" || file.type === "image/jpg")) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            cacheCarimboBase64 = reader.result;
+            localStorage.setItem('imgCarimboCoordenador', cacheCarimboBase64);
+            alert("Carimbo configurado!");
+        };
+        reader.readAsDataURL(file);
+    } else {
+        alert("Formato inválido! Insira um arquivo com extensão .JPG");
+        e.target.value = "";
+    }
+}
+
+async function processarInjecaoCarimboEBaixarPDF() {
+    if (!documentoSelecionadoParaCarimbo) return;
+    if (!cacheCarimboBase64) {
+        alert("Por favor, faça upload da sua imagem de carimbo JPG antes de prosseguir.");
         return;
     }
 
-    filtrados.forEach(aluno => {
-        const li = document.createElement('li');
-        li.innerHTML = `
-            <strong>🎓 ${aluno.nome || 'Aluno'}</strong> (${aluno.curso || 'Geral'})<br>
-            <span class="badge-data">✅ Documento: ${aluno.arquivoHomologado || 'Arquivo'}</span>
-            <span class="badge-data">🕒 Atendido em: ${aluno.dataAtendimento || '--/--/----'}</span>
-        `;
-        ulAtendidos.appendChild(li);
-    });
-}
-function fecharPainelDeVisualizacao() {
-    document.getElementById('pdf-preview').classList.add('hidden');
-    document.getElementById('btn-baixar').classList.add('hidden');
-    document.getElementById('dados-aluno-preview').classList.add('hidden');
-}
-
-function abrirVisualizadorDoEstagio(doc) {
-    docAtivoEmFoco = doc;
-    
-    const areaDossie = document.getElementById('dados-aluno-preview');
-    areaDossie.innerHTML = `
-        <strong>DADOS COMPLETOS DO ALUNO:</strong><br>
-        • <strong>Nome:</strong> ${doc.metaAluno.nome} | • <strong>RA/CPF:</strong> ${doc.metaAluno.registro}<br>
-        • <strong>Curso:</strong> ${doc.metaAluno.curso} | • <strong>Telefone:</strong> ${doc.metaAluno.telefone}<br>
-        • <strong>Empresa / Local do Estágio:</strong> ${doc.metaAluno.local}
-    `;
-    areaDossie.classList.remove('hidden');
-
-    const frame = document.getElementById('pdf-preview');
-    frame.src = doc.pdfDadosBase64;
-    frame.classList.remove('hidden');
-    document.getElementById('btn-baixar').classList.remove('hidden');
-}
-
-// Processador de Injeção de Imagem Nativa (JPG) com Transparência e na Última Página
-document.getElementById('btn-baixar').addEventListener('click', async () => {
-    if (!docAtivoEmFoco) return;
-
-    if (!imagemCarimboGlobalBase64) {
-        return alert("Atenção: Carregue primeiro a imagem JPG do seu carimbo/assinatura no campo verde acima!");
-    }
-
     try {
-        const rawPdfBytes = Uint8Array.from(atob(docAtivoEmFoco.pdfDadosBase64.split(',')[1]), c => c.charCodeAt(0));
-        const rawImgBytes = Uint8Array.from(atob(imagemCarimboGlobalBase64.split(',')[1]), c => c.charCodeAt(0));
+        const pdfBytes = Uint8Array.from(atob(documentoSelecionadoParaCarimbo.pdfDadosBase64.split(',')[1]), c => c.charCodeAt(0));
+        const imgBytes = Uint8Array.from(atob(cacheCarimboBase64.split(',')[1]), c => c.charCodeAt(0));
 
-        const documentoPdfInstancia = await PDFLib.PDFDocument.load(rawPdfBytes);
-        
-        const paginas = documentoPdfInstancia.getPages();
-        const ultimaPagina = paginas[paginas.length - 1]; 
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+        const paginas = pdfDoc.getPages();
+        const ultimaPagina = paginas[paginas.length - 1];
 
-        const imagemCarimboInjetavel = await documentoPdfInstancia.embedJpg(rawImgBytes);
+        const imgEmbed = await pdfDoc.embedJpg(imgBytes);
+        const dimensoes = imgEmbed.scaleToFit(150, 150);
 
-        const larguraDesejada = 150;
-        const dimensoesCarimbo = imagemCarimboInjetavel.scaleToFit(larguraDesejada, larguraDesejada);
-
-        ultimaPagina.drawImage(imagemCarimboInjetavel, {
-            x: ultimaPagina.getWidth() - dimensoesCarimbo.width - 50, 
-            y: 50, 
-            width: dimensoesCarimbo.width,
-            height: dimensoesCarimbo.height,
-            opacity: 0.75, 
+        ultimaPagina.drawImage(imgEmbed, {
+            x: ultimaPagina.getWidth() - dimensoes.width - 50,
+            y: 50,
+            width: dimensoes.width,
+            height: dimensoes.height,
+            opacity: 0.75
         });
 
-        const bytesFinaisModificados = await documentoPdfInstancia.save();
-
-        const blob = new Blob([bytesFinaisModificados], { type: "application/pdf" });
-        const linkDownload = document.createElement('a');
-        linkDownload.href = URL.createObjectURL(blob);
-        linkDownload.download = `HOMOLOGADO_${docAtivoEmFoco.metaAluno.nome}_${docAtivoEmFoco.nomeOriginalArquivo}`;
-        linkDownload.click();
-
-        // --- SALVAR NO HISTÓRICO DE ATENDIDOS ANTES DE REMOVER DA FILA ---
-        let historicoAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
+        const pdfModificadoBytes = await pdfDoc.save();
+        const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
         
-        const agora = new Date();
-        const dataFormatada = agora.toLocaleDateString('pt-BR') + ' ' + agora.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `HOMOLOGADO_${documentoSelecionadoParaCarimbo.metaAluno.nome}_${documentoSelecionadoParaCarimbo.nomeOriginalArquivo}`;
+        link.click();
 
-        historicoAtendidos.push({
-            coordenadorId: docAtivoEmFoco.coordenadorDestinatarioId,
-            nome: docAtivoEmFoco.metaAluno.nome,
-            curso: docAtivoEmFoco.metaAluno.curso,
-            arquivoHomologado: docAtivoEmFoco.nomeOriginalArquivo,
-            dataAtendimento: dataFormatada
+        // Salva no histórico de atendidos
+        let atendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
+        const dataAgora = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+        
+        atendidos.push({
+            coordenadorId: documentoSelecionadoParaCarimbo.coordenadorDestinatarioId,
+            nome: documentoSelecionadoParaCarimbo.metaAluno.nome,
+            curso: documentoSelecionadoParaCarimbo.metaAluno.curso,
+            arquivoHomologado: documentoSelecionadoParaCarimbo.nomeOriginalArquivo,
+            dataAtendimento: dataAgora
         });
-        localStorage.setItem('bancoAlunosAtendidos', JSON.stringify(historicoAtendidos));
-        // -----------------------------------------------------------------
+        localStorage.setItem('bancoAlunosAtendidos', JSON.stringify(atendidos));
 
-        // Remove o item despachado dos pendentes
-        let listaGlobal = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-        listaGlobal = listaGlobal.filter(d => d.idDocumento !== docAtivoEmFoco.idDocumento);
-        localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(listaGlobal));
-        
-        fecharPainelDeVisualizacao();
-        
-        // Atualiza ambas as listas simultaneamente na interface
-        atualizarPainelCoordenadorCompleto();
-        
-        alert("Documento autenticado com carimbo transparente na última página e movido para 'Alunos Atendidos'!");
+        // Remove dos pendentes
+        let pendentes = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
+        pendentes = pendentes.filter(d => d.idDocumento !== documentoSelecionadoParaCarimbo.idDocumento);
+        localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(pendentes));
 
-    } catch (erro) {
-        console.error(erro);
-        alert("Erro ao processar PDF. Verifique se o carimbo é um JPG válido.");
+        fecharAreaDePreviewCoordenador();
+        atualizarListasDoPainelCoordenador();
+        alert("Documento assinado com carimbo!");
+
+    } catch (err) {
+        console.error(err);
+        alert("Erro técnico ao carimbar o PDF. Verifique se o carimbo enviado é um JPG legítimo.");
     }
-});
-
-// Altere também a chamada do "onchange" na função de sincronização de selects lá em cima no app.js se necessário
-function atualizarComponentesSelecaoCoordenadores() {
-    const listaCoords = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
-    const selectAluno = document.getElementById('aluno-coordenador-select');
-    const selectFiltroCoord = document.getElementById('filtro-coordenador');
-    
-    if(selectAluno && selectFiltroCoord) {
-        selectAluno.innerHTML = "";
-        selectFiltroCoord.innerHTML = '<option value="todos">-- Exibir Todos os Coordenadores --</option>';
-
-        listaCoords.forEach(c => {
-            const itemAluno = new Option(`${c.nome} (${c.curso})`, c.id);
-            selectAluno.add(itemAluno);
-
-            const itemFiltro = new Option(c.nome, c.id);
-            selectFiltroCoord.add(itemFiltro);
-        });
-    }
-}
-
-// PWA Service Worker Registration
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
 }
