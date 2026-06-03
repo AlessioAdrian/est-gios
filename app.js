@@ -7,10 +7,10 @@ const CONFIG = {
     
     // 🚨 INSIRA OS DADOS DO SEU REPOSITÓRIO DO GITHUB AQUI EMBAIXO:
     github: {
-        token: "SEU_PERSONAL_ACCESS_TOKEN_AQUI", // Seu token gerado no GitHub
-        dono: "SEU_USUARIO_OU_ORGANIZACAO",        // Ex: "mariana-dev"
-        repositorio: "NOME_DO_REPOSITORIO",      // Ex: "app-estagio-dados"
-        pasta: "documentos-homologados"          // Nome da pasta dentro do repositório onde os PDFs serão salvos
+        token: "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", // Seu token gerado no GitHub
+        dono: "Aléssio Adrian Chiuratto",        // Ex: "mariana-dev"
+        repositorio: "Documentos de Estágio",      // Ex: "app-estagio-dados"
+        pasta: "App_estagio"          // Nome da pasta dentro do repositório onde os PDFs serão salvos
     }
 };
 
