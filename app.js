@@ -7,7 +7,7 @@ const CONFIG = {
     
     // 🚨 INSIRA OS DADOS DO SEU REPOSITÓRIO DO GITHUB AQUI EMBAIXO:
     github: {
-        token: "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", // Seu token gerado no GitHub
+        token: "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", // Seu token gerado no GitHub
         dono: "Aléssio Adrian Chiuratto",        // Ex: "mariana-dev"
         repositorio: "Documentos de Estágio",      // Ex: "app-estagio-dados"
         pasta: "App_estagio"          // Nome da pasta dentro do repositório onde os PDFs serão salvos
