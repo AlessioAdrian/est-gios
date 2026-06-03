@@ -6,7 +6,7 @@ const CONFIG = {
     senhaAdmin: "admin99",
     
     // 🚨 COLE OU ALTERE O LINK DA SUA PASTA DO GOOGLE DRIVE AQUI EMBAIXO:
-    linkGoogleDrive: "https://drive.google.com/drive/folders/EXEMPLO_DA_SUA_PASTA_DE_ESTAGIO"
+    linkGoogleDrive: "https://drive.google.com/drive/folders/18khqnfYqW8zKB-OkqSpQNOchn7IYcyOY?usp=drive_link"
 };
 
 let viewPendenteAutenticacao = "";
