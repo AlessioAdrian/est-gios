@@ -5,8 +5,13 @@ const CONFIG = {
     senhaCoordenador: "1234",
     senhaAdmin: "admin99",
     
-    // 🚨 COLE OU ALTERE O LINK DA SUA PASTA DO GOOGLE DRIVE AQUI EMBAIXO:
-    linkGoogleDrive: "https://drive.google.com/drive/folders/18khqnfYqW8zKB-OkqSpQNOchn7IYcyOY?usp=drive_link"
+    // 🚨 INSIRA OS DADOS DO SEU REPOSITÓRIO DO GITHUB AQUI EMBAIXO:
+    github: {
+        token: "SEU_PERSONAL_ACCESS_TOKEN_AQUI", // Seu token gerado no GitHub
+        dono: "SEU_USUARIO_OU_ORGANIZACAO",        // Ex: "mariana-dev"
+        repositorio: "NOME_DO_REPOSITORIO",      // Ex: "app-estagio-dados"
+        pasta: "documentos-homologados"          // Nome da pasta dentro do repositório onde os PDFs serão salvos
+    }
 };
 
 let viewPendenteAutenticacao = "";
@@ -22,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switchView('aluno');
 });
 
-function garantirDadosIniciaisDoSistema() {
+function garantizarDadosIniciaisDoSistema() {
     let coordsAtivos = localStorage.getItem('bancoCoordenadores');
     if (!coordsAtivos) {
         const mockInicial = [{ id: "coord-padrao-1", nome: "Coordenador Geral de Estágios", curso: "Geral" }];
@@ -48,7 +53,6 @@ function sincronizarListasDeCoordenadores() {
 }
 
 function inicializarOuvintesDeEventos() {
-    // Ouvinte do input de arquivos do Aluno
     const inputPdf = document.getElementById('pdf-input');
     if (inputPdf) {
         inputPdf.addEventListener('change', (e) => {
@@ -72,16 +76,15 @@ function inicializarOuvintesDeEventos() {
     if (document.getElementById('coordenador-carimbo-img')) document.getElementById('coordenador-carimbo-img').addEventListener('change', processarUploadImagemCarimbo);
     if (document.getElementById('filtro-coordenador')) document.getElementById('filtro-coordenador').addEventListener('change', atualizarListasDoPainelCoordenador);
 
-    // Ouvintes de Ações Compartilhadas de Homologação (Google Drive / Download Local)
-    if (document.getElementById('btn-salvar-googledrive')) {
-        document.getElementById('btn-salvar-googledrive').addEventListener('click', () => processarHomologacaoMestre(true));
+    // Ouvintes de Ações de Homologação (GitHub / Download Local)
+    if (document.getElementById('btn-salvar-github')) {
+        document.getElementById('btn-salvar-github').addEventListener('click', () => processarHomologacaoMestre(true));
     }
     if (document.getElementById('btn-baixar-local')) {
         document.getElementById('btn-baixar-local').addEventListener('click', () => processarHomologacaoMestre(false));
     }
 }
 
-// Gerenciador de Navegação (Chaveamento de Telas)
 function switchView(nomeView) {
     const blocosViews = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
     blocosViews.forEach(id => {
@@ -125,7 +128,6 @@ function logout() {
     switchView('aluno');
 }
 
-// Lógica de Envio (Aluno)
 async function processarEnvioDocumentosAluno() {
     const nome = document.getElementById('aluno-nome').value.trim();
     const registro = document.getElementById('aluno-registro').value.trim();
@@ -162,7 +164,6 @@ async function processarEnvioDocumentosAluno() {
     document.getElementById('pdf-input').value = "";
 }
 
-// Lógica Admin
 function processarCadastroNovoCoordenador() {
     const nome = document.getElementById('admin-nome-coord').value.trim();
     const curso = document.getElementById('admin-curso-coord').value.trim();
@@ -189,7 +190,6 @@ function renderizarListaAdminCoordenadores() {
     });
 }
 
-// Lógica Coordenador
 function atualizarListasDoPainelCoordenador() {
     const elFiltro = document.getElementById('filtro-coordenador');
     const filtro = elFiltro ? elFiltro.value : "todos";
@@ -268,8 +268,8 @@ function processarUploadImagemCarimbo(e) {
     }
 }
 
-// FUNÇÃO MESTRE ATUALIZADA COM TRATAMENTO DE GOOGLE DRIVE E DOWNLOAD LOCAL
-async function processarHomologacaoMestre(redirecionarParaGoogleDrive = false) {
+// FUNÇÃO MESTRE ATUALIZADA COM SUCESSO DO GITHUB E DOWNLOAD LOCAL
+async function processarHomologacaoMestre(enviarParaGitHub = false) {
     if (!documentoSelecionadoParaCarimbo) return;
     if (!cacheCarimboBase64) return alert("Faça o upload do seu carimbo JPG antes de assinar.");
 
@@ -294,22 +294,46 @@ async function processarHomologacaoMestre(redirecionarParaGoogleDrive = false) {
         });
 
         const pdfModificadoBytes = await pdfDoc.save();
-        const nomeArquivoFinal = `HOMOLOGADO_${documentoSelecionadoParaCarimbo.metaAluno.nome}_${documentoSelecionadoParaCarimbo.nomeOriginalArquivo}`;
+        const nomeArquivoFinal = `HOMOLOGADO_${documentoSelecionadoParaCarimbo.metaAluno.nome.replace(/\s+/g, '_')}_${documentoSelecionadoParaCarimbo.nomeOriginalArquivo.replace(/\s+/g, '_')}`;
+
+        // Converte os bytes gerados em string binária comum
+        let binarioString = "";
+        for (let i = 0; i < pdfModificadoBytes.length; i++) {
+            binarioString += String.fromCharCode(pdfModificadoBytes[i]);
+        }
+        // Converte a string binária para Base64 puro (exigido pelo GitHub API)
+        const base64PuroGitHub = btoa(binarioString);
 
         // 2. Executa a ação selecionada pelo Coordenador
-        if (redirecionarParaGoogleDrive) {
-            // Ação Google Drive: Faz o download e abre a pasta configurada do Drive em uma nova aba
-            const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = nomeArquivoFinal;
-            link.click();
+        if (enviarParaGitHub) {
+            // Ação GitHub: Envio via API REST em segundo plano
+            const urlApi = `https://api.github.com/repos/${CONFIG.github.dono}/${CONFIG.github.repositorio}/contents/${CONFIG.github.pasta}/${nomeArquivoFinal}`;
             
-            // Abre a pasta específica do Google Drive configurada no topo do app
-            window.open(CONFIG.linkGoogleDrive, '_blank');
-            alert(`Documento assinado!\nO download iniciou e a pasta do Google Drive foi aberta para você arrastar o arquivo: ${nomeArquivoFinal}`);
+            const payload = {
+                message: `Adicionando documento homologado: ${nomeArquivoFinal}`,
+                content: base64PuroGitHub
+            };
+
+            const resposta = await fetch(urlApi, {
+                method: "PUT",
+                headers: {
+                    "Authorization": `token ${CONFIG.github.token}`,
+                    "Accept": "application/vnd.github.v3+json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (resposta.ok) {
+                alert(`Sucesso! O documento assinado foi enviado diretamente para o repositório do GitHub com o nome:\n${nomeArquivoFinal}`);
+            } else {
+                const erroDados = await resposta.json();
+                console.error("Erro GitHub API:", erroDados);
+                alert("Falha ao enviar para o GitHub. Verifique se o Token e as configurações no topo do script estão corretos.");
+                return; // Interrompe o processo para não remover o arquivo da fila caso dê erro
+            }
         } else {
-            // Ação Local: Apenas baixa o arquivo direto no computador do Coordenador
+            // Ação Local: Tradicional download físico
             const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
@@ -342,6 +366,6 @@ async function processarHomologacaoMestre(redirecionarParaGoogleDrive = false) {
 
     } catch (err) {
         console.error(err);
-        alert("Erro crítico no processamento do PDF. Verifique se a imagem do seu carimbo é um JPG válido.");
+        alert("Erro crítico no processamento do PDF.");
     }
 }
