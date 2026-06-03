@@ -122,22 +122,27 @@
                         <ul id="lista-alunos-atendidos" class="lista-atendidos"></ul>
                     </div>
                 </div>
+<div class="preview-area">
+    <h3>Visualização e Assinatura</h3>
+
+    <div class="carimbo-config-box">
+        <label><strong>Upload do seu Carimbo institucional (Apenas .JPG ou .JPEG):</strong></label>
+        <input type="file" id="coordenador-carimbo-img" accept="image/jpeg, image/jpg">
+    </div>
+
+    <div id="dados-aluno-preview" class="hidden"></div>
+
+    <div id="pdf-render-container">
+        <iframe id="pdf-preview" class="hidden"></iframe>
+    </div>
+
+    <div id="acoes-coordenador-botoes" class="hidden" style="display: flex; gap: 10px; margin-top: 15px;">
+        <button id="btn-salvar-onedrive" class="btn-primary" style="flex: 1; background-color: #0078d4;">🔄 Aplicar Carimbo e Enviar para o OneDrive</button>
+        <button id="btn-baixar-local" class="btn-success" style="flex: 1; background-color: #16a34a;">📥 Aplicar Carimbo e Baixar Arquivo</button>
+    </div>
+</div>
                 
-                <div class="preview-area">
-                    <h3>Visualização e Assinatura</h3>
-
-                    <div class="carimbo-config-box">
-                        <label><strong>Upload do seu Carimbo institucional (Apenas .JPG ou .JPEG):</strong></label>
-                        <input type="file" id="coordenador-carimbo-img" accept="image/jpeg, image/jpg">
-                    </div>
-
-                    <div id="dados-aluno-preview" class="hidden"></div>
-
-                    <div id="pdf-render-container">
-                        <iframe id="pdf-preview" class="hidden"></iframe>
-                    </div>
-                    <button id="btn-baixar" class="btn-success hidden">Aplicar Carimbo JPG e Baixar</button>
-                </div>
+                
             </div>
         </section>
     </main>
