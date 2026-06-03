@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switchView('aluno');
 });
 
-function garantizarDadosIniciaisDoSistema() {
+function garantirDadosIniciaisDoSistema() {
     let coordsAtivos = localStorage.getItem('bancoCoordenadores');
     if (!coordsAtivos) {
         const mockInicial = [{ id: "coord-padrao-1", nome: "Coordenador Geral de Estágios", curso: "Geral" }];
