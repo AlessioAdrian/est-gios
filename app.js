@@ -1,371 +1,233 @@
-// ==========================================
-// CONFIGURAÇÕES GLOBAIS E LINKS DO SISTEMA
-// ==========================================
 const CONFIG = {
     senhaCoordenador: "1234",
-    senhaAdmin: "admin99",
-    
-    // 🚨 INSIRA OS DADOS DO SEU REPOSITÓRIO DO GITHUB AQUI EMBAIXO:
-    github: {
-        token: "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", // Seu token gerado no GitHub
-        dono: "Aléssio Adrian Chiuratto",        // Ex: "mariana-dev"
-        repositorio: "DocEstagio",      // Ex: "app-estagio-dados"
-        pasta: "App_estagio"          // Nome da pasta dentro do repositório onde os PDFs serão salvos
-    }
+    senhaAdmin: "admin99"
 };
 
-let viewPendenteAutenticacao = "";
-let cacheCarimboBase64 = localStorage.getItem('imgCarimboCoordenador') || null;
-let documentoSelecionadoParaCarimbo = null;
-let filaTemporariaArquivosAluno = [];
+let viewAtual = "";
+let imgCarimboBase64 = localStorage.getItem('imgCarimbo') || null;
+let docFocado = null;
+let filaArquivos = [];
 
-// Evento disparado assim que o documento HTML carrega completamente
 document.addEventListener("DOMContentLoaded", () => {
-    garantirDadosIniciaisDoSistema();
-    sincronizarListasDeCoordenadores();
-    inicializarOuvintesDeEventos();
+    garantirDadosIniciais();
+    sincronizarCoordenadores();
+    configurarEventos();
     switchView('aluno');
 });
 
-function garantirDadosIniciaisDoSistema() {
-    let coordsAtivos = localStorage.getItem('bancoCoordenadores');
-    if (!coordsAtivos) {
-        const mockInicial = [{ id: "coord-padrao-1", nome: "Coordenador Geral de Estágios", curso: "Geral" }];
-        localStorage.setItem('bancoCoordenadores', JSON.stringify(mockInicial));
+function garantirDadosIniciais() {
+    if (!localStorage.getItem('bancoCoordenadores')) {
+        localStorage.setItem('bancoCoordenadores', JSON.stringify([{id: "c1", nome: "Coord. Geral", curso: "Geral"}]));
     }
-    if (!localStorage.getItem('bancoDocumentosEstagio')) localStorage.setItem('bancoDocumentosEstagio', JSON.stringify([]));
-    if (!localStorage.getItem('bancoAlunosAtendidos')) localStorage.setItem('bancoAlunosAtendidos', JSON.stringify([]));
+    if (!localStorage.getItem('bancoDocumentosEstagio')) localStorage.setItem('bancoDocumentosEstagio', "[]");
+    if (!localStorage.getItem('bancoAlunosAtendidos')) localStorage.setItem('bancoAlunosAtendidos', "[]");
 }
 
-function sincronizarListasDeCoordenadores() {
+function sincronizarCoordenadores() {
     const lista = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
-    const selectAluno = document.getElementById('aluno-coordenador-select');
-    const selectFiltroCoord = document.getElementById('filtro-coordenador');
-
-    if (selectAluno) {
-        selectAluno.innerHTML = "";
-        lista.forEach(c => selectAluno.add(new Option(`${c.nome} (${c.curso})`, c.id)));
+    const selAluno = document.getElementById('aluno-coordenador-select');
+    const selFiltro = document.getElementById('filtro-coordenador');
+    
+    if (selAluno) {
+        selAluno.innerHTML = "";
+        lista.forEach(c => selAluno.add(new Option(`${c.nome} (${c.curso})`, c.id)));
     }
-    if (selectFiltroCoord) {
-        selectFiltroCoord.innerHTML = '<option value="todos">-- Exibir Todos os Coordenadores --</option>';
-        lista.forEach(c => selectFiltroCoord.add(new Option(c.nome, c.id)));
+    if (selFiltro) {
+        selFiltro.innerHTML = '<option value="todos">-- Todos --</option>';
+        lista.forEach(c => selFiltro.add(new Option(c.nome, c.id)));
     }
 }
 
-function inicializarOuvintesDeEventos() {
+function configurarEventos() {
     const inputPdf = document.getElementById('pdf-input');
     if (inputPdf) {
         inputPdf.addEventListener('change', (e) => {
-            const validos = Array.from(e.target.files).filter(f => f.type === "application/pdf");
-            filaTemporariaArquivosAluno = filaTemporariaArquivosAluno.concat(validos);
-            const display = document.getElementById('lista-arquivos-selecionados');
-            if (display) {
-                display.innerHTML = "";
-                filaTemporariaArquivosAluno.forEach(f => {
+            filaArquivos = Array.from(e.target.files).filter(f => f.type === "application/pdf");
+            const listaU = document.getElementById('lista-arquivos-selecionados');
+            if (listaU) {
+                listaU.innerHTML = "";
+                filaArquivos.forEach(f => {
                     const li = document.createElement('li');
-                    li.textContent = `📎 PDF Selecionado: ${f.name}`;
-                    display.appendChild(li);
+                    li.textContent = `📄 ${f.name}`;
+                    listaU.appendChild(li);
                 });
             }
         });
     }
 
-    if (document.getElementById('btn-enviar')) document.getElementById('btn-enviar').addEventListener('click', processarEnvioDocumentosAluno);
-    if (document.getElementById('btn-login')) document.getElementById('btn-login').addEventListener('click', executarAutenticacaoPainel);
-    if (document.getElementById('btn-cadastrar-coord')) document.getElementById('btn-cadastrar-coord').addEventListener('click', processarCadastroNovoCoordenador);
-    if (document.getElementById('coordenador-carimbo-img')) document.getElementById('coordenador-carimbo-img').addEventListener('change', processarUploadImagemCarimbo);
-    if (document.getElementById('filtro-coordenador')) document.getElementById('filtro-coordenador').addEventListener('change', atualizarListasDoPainelCoordenador);
+    document.getElementById('btn-enviar').onclick = processarEnvio;
+    document.getElementById('btn-login').onclick = autenticar;
+    document.getElementById('btn-cadastrar-coord').onclick = cadastrarCoord;
+    document.getElementById('btn-baixar-final').onclick = homologarDocumento;
 
-    // Ouvintes de Ações de Homologação (GitHub / Download Local)
-    if (document.getElementById('btn-salvar-github')) {
-        document.getElementById('btn-salvar-github').addEventListener('click', () => processarHomologacaoMestre(true));
-    }
-    if (document.getElementById('btn-baixar-local')) {
-        document.getElementById('btn-baixar-local').addEventListener('click', () => processarHomologacaoMestre(false));
+    const carimboIn = document.getElementById('coordenador-carimbo-img');
+    if (carimboIn) {
+        carimboIn.onchange = (e) => {
+            const f = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = () => {
+                imgCarimboBase64 = reader.result;
+                localStorage.setItem('imgCarimbo', imgCarimboBase64);
+                alert("Carimbo salvo!");
+            };
+            reader.readAsDataURL(f);
+        };
     }
 }
 
-function switchView(nomeView) {
-    const blocosViews = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
-    blocosViews.forEach(id => {
-        const elemento = document.getElementById(id);
-        if (elemento) elemento.classList.add('hidden');
-    });
+function switchView(v) {
+    const secoes = ['view-aluno', 'view-login', 'view-admin', 'view-coordenador'];
+    secoes.forEach(s => document.getElementById(s).classList.add('hidden'));
 
-    if (nomeView === 'aluno') {
-        if (document.getElementById('view-aluno')) document.getElementById('view-aluno').classList.remove('hidden');
+    if (v === 'aluno') {
+        document.getElementById('view-aluno').classList.remove('hidden');
     } else {
-        viewPendenteAutenticacao = nomeView;
-        const jaAutenticado = sessionStorage.getItem(`sessao_auth_${nomeView}`) === 'true';
-
-        if (jaAutenticado) {
-            const telaDestino = document.getElementById(`view-${nomeView}`);
-            if (telaDestino) telaDestino.classList.remove('hidden');
-            if (nomeView === 'coordenador') atualizarListasDoPainelCoordenador();
-            if (nomeView === 'admin') renderizarListaAdminCoordenadores();
+        viewAtual = v;
+        if (sessionStorage.getItem('auth_' + v) === 'true') {
+            document.getElementById('view-' + v).classList.remove('hidden');
+            if (v === 'coordenador') atualizarPainelCoordenador();
+            if (v === 'admin') renderAdminList();
         } else {
-            if (document.getElementById('login-titulo')) document.getElementById('login-titulo').textContent = `Acesso Controlado: Painel ${nomeView.toUpperCase()}`;
-            if (document.getElementById('view-login')) document.getElementById('view-login').classList.remove('hidden');
-            if (document.getElementById('senha-acesso')) document.getElementById('senha-acesso').value = "";
+            document.getElementById('view-login').classList.remove('hidden');
+            document.getElementById('senha-acesso').value = "";
         }
     }
 }
 
-function executarAutenticacaoPainel() {
-    const senhaDigitada = document.getElementById('senha-acesso').value;
-    const senhaCorreta = (viewPendenteAutenticacao === 'admin') ? CONFIG.senhaAdmin : CONFIG.senhaCoordenador;
-
-    if (senhaDigitada === senhaCorreta) {
-        sessionStorage.setItem(`sessao_auth_${viewPendenteAutenticacao}`, 'true');
-        switchView(viewPendenteAutenticacao);
-    } else {
-        alert("Senha incorreta!");
-    }
+function autenticar() {
+    const s = document.getElementById('senha-acesso').value;
+    const correta = (viewAtual === 'admin') ? CONFIG.senhaAdmin : CONFIG.senhaCoordenador;
+    if (s === correta) {
+        sessionStorage.setItem('auth_' + viewAtual, 'true');
+        switchView(viewAtual);
+    } else { alert("Senha incorreta!"); }
 }
 
 function logout() {
-    sessionStorage.removeItem(`sessao_auth_${viewPendenteAutenticacao}`);
+    sessionStorage.removeItem('auth_' + viewAtual);
     switchView('aluno');
 }
 
-async function processarEnvioDocumentosAluno() {
-    const nome = document.getElementById('aluno-nome').value.trim();
-    const registro = document.getElementById('aluno-registro').value.trim();
-    const curso = document.getElementById('aluno-curso').value.trim();
-    const local = document.getElementById('aluno-local').value.trim();
-    const selectCoord = document.getElementById('aluno-coordenador-select');
-    const idCoordenador = selectCoord ? selectCoord.value : "";
+async function processarEnvio() {
+    const n = document.getElementById('aluno-nome').value;
+    const r = document.getElementById('aluno-registro').value;
+    const c = document.getElementById('aluno-coordenador-select').value;
+    
+    if (!n || !r || filaArquivos.length === 0) return alert("Preencha todos os dados!");
 
-    if (!nome || !registro || !idCoordenador || filaTemporariaArquivosAluno.length === 0) {
-        alert("Campos obrigatórios faltando ou nenhum PDF anexado!");
-        return;
-    }
-
-    let bancoDocs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-    const lerBase64 = (file) => new Promise(res => {
-        const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file);
+    let banco = JSON.parse(localStorage.getItem('bancoDocumentosEstagio'));
+    const toB64 = (f) => new Promise(res => {
+        const rd = new FileReader(); rd.onload = () => res(rd.result); rd.readAsDataURL(f);
     });
 
-    for (let file of filaTemporariaArquivosAluno) {
-        const base64 = await lerBase64(file);
-        bancoDocs.push({
-            idDocumento: "doc-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
-            nomeOriginalArquivo: file.name,
-            pdfDadosBase64: base64,
-            coordenadorDestinatarioId: idCoordenador,
-            metaAluno: { nome, registro, curso, local }
+    for (let f of filaArquivos) {
+        const b64 = await toB64(f);
+        banco.push({
+            id: Date.now() + Math.random(),
+            nomeArq: f.name,
+            pdf: b64,
+            coordId: c,
+            aluno: { nome: n, ra: r, curso: document.getElementById('aluno-curso').value, local: document.getElementById('aluno-local').value }
         });
     }
-
-    localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(bancoDocs));
-    alert("Documentos enviados com sucesso!");
-    filaTemporariaArquivosAluno = [];
+    localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(banco));
+    alert("Enviado!");
+    filaArquivos = [];
     document.getElementById('lista-arquivos-selecionados').innerHTML = "";
-    document.getElementById('pdf-input').value = "";
 }
 
-function processarCadastroNovoCoordenador() {
-    const nome = document.getElementById('admin-nome-coord').value.trim();
-    const curso = document.getElementById('admin-curso-coord').value.trim();
-    if (!nome || !curso) return alert("Preencha todos os campos.");
-
-    let banco = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
-    banco.push({ id: "coord-" + Date.now(), nome, curso });
+function cadastrarCoord() {
+    const n = document.getElementById('admin-nome-coord').value;
+    const c = document.getElementById('admin-curso-coord').value;
+    let banco = JSON.parse(localStorage.getItem('bancoCoordenadores'));
+    banco.push({id: "coord-" + Date.now(), nome: n, curso: c});
     localStorage.setItem('bancoCoordenadores', JSON.stringify(banco));
-    
-    document.getElementById('admin-nome-coord').value = "";
-    document.getElementById('admin-curso-coord').value = "";
-    renderizarListaAdminCoordenadores();
-    sincronizarListasDeCoordenadores();
+    renderAdminList();
+    sincronizarCoordenadores();
 }
 
-function renderizarListaAdminCoordenadores() {
+function renderAdminList() {
     const ul = document.getElementById('lista-coordenadores-cadastrados');
-    if (!ul) return; ul.innerHTML = "";
-    const lista = JSON.parse(localStorage.getItem('bancoCoordenadores')) || [];
-    lista.forEach(c => {
+    ul.innerHTML = "";
+    JSON.parse(localStorage.getItem('bancoCoordenadores')).forEach(c => {
         const li = document.createElement('li');
-        li.textContent = `💼 ${c.nome} [Curso: ${c.curso}]`;
+        li.textContent = `${c.nome} [${c.curso}]`;
         ul.appendChild(li);
     });
 }
 
-function atualizarListasDoPainelCoordenador() {
-    const elFiltro = document.getElementById('filtro-coordenador');
-    const filtro = elFiltro ? elFiltro.value : "todos";
-
-    const ulPendentes = document.getElementById('lista-documentos');
-    if (ulPendentes) {
-        ulPendentes.innerHTML = "";
-        const todosDocs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-        const filtrados = todosDocs.filter(d => filtro === "todos" || d.coordenadorDestinatarioId === filtro);
-
-        if (filtrados.length === 0) {
-            ulPendentes.innerHTML = '<li style="color:gray; padding:10px;">Nenhum pendente.</li>';
-            fecharAreaDePreviewCoordenador();
-        } else {
-            filtrados.forEach(doc => {
-                const li = document.createElement('li');
-                li.textContent = `[${doc.metaAluno.nome}] - ${doc.nomeOriginalArquivo}`;
-                li.style.cursor = "pointer";
-                li.onclick = () => carregarPreviewDocumentoEstagio(doc);
-                ulPendentes.appendChild(li);
-            });
-        }
-    }
-
-    const ulAtendidos = document.getElementById('lista-alunos-atendidos');
-    if (ulAtendidos) {
-        ulAtendidos.innerHTML = "";
-        const todosAtendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
-        const filtradosAtendidos = todosAtendidos.filter(a => filtro === "todos" || a.coordenadorId === filtro);
-
-        if (filtradosAtendidos.length === 0) {
-            ulAtendidos.innerHTML = '<li style="color:gray; padding:10px;">Nenhum histórico.</li>';
-        } else {
-            filtradosAtendidos.forEach(aluno => {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong>🎓 ${aluno.nome}</strong><br><small style="color:green;">✅ ${aluno.arquivoHomologado} (${aluno.dataAtendimento})</small>`;
-                ulAtendidos.appendChild(li);
-            });
-        }
-    }
-}
-
-function fecharAreaDePreviewCoordenador() {
-    if (document.getElementById('pdf-preview')) document.getElementById('pdf-preview').classList.add('hidden');
-    if (document.getElementById('dados-aluno-preview')) document.getElementById('dados-aluno-preview').classList.add('hidden');
-    if (document.getElementById('acoes-coordenador-botoes')) document.getElementById('acoes-coordenador-botoes').classList.add('hidden');
-    documentoSelecionadoParaCarimbo = null;
-}
-
-function carregarPreviewDocumentoEstagio(doc) {
-    documentoSelecionadoParaCarimbo = doc;
-    const dados = document.getElementById('dados-aluno-preview');
-    if (dados) {
-        dados.innerHTML = `<strong>ALUNO:</strong> ${doc.metaAluno.nome} | <strong>EMPRESA:</strong> ${doc.metaAluno.local}`;
-        dados.classList.remove('hidden');
-    }
-    if (document.getElementById('pdf-preview')) {
-        document.getElementById('pdf-preview').src = doc.pdfDadosBase64;
-        document.getElementById('pdf-preview').classList.remove('hidden');
-    }
-    if (document.getElementById('acoes-coordenador-botoes')) document.getElementById('acoes-coordenador-botoes').classList.remove('hidden');
-}
-
-function processarUploadImagemCarimbo(e) {
-    const file = e.target.files[0];
-    if (file && (file.type === "image/jpeg" || file.type === "image/jpg")) {
-        const reader = new FileReader();
-        reader.onload = function() {
-            cacheCarimboBase64 = reader.result;
-            localStorage.setItem('imgCarimboCoordenador', cacheCarimboBase64);
-            alert("Carimbo institucional configurado com sucesso!");
+function atualizarPainelCoordenador() {
+    const f = document.getElementById('filtro-coordenador').value;
+    
+    const ulP = document.getElementById('lista-documentos');
+    ulP.innerHTML = "";
+    const docs = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')).filter(d => f === "todos" || d.coordId === f);
+    docs.forEach(d => {
+        const li = document.createElement('li');
+        li.textContent = d.aluno.nome + " - " + d.nomeArq;
+        li.onclick = () => {
+            docFocado = d;
+            document.getElementById('dados-aluno-preview').innerHTML = `<strong>Aluno:</strong> ${d.aluno.nome} | <strong>Local:</strong> ${d.aluno.local}`;
+            document.getElementById('dados-aluno-preview').classList.remove('hidden');
+            document.getElementById('pdf-preview').src = d.pdf;
+            document.getElementById('pdf-preview').classList.remove('hidden');
+            document.getElementById('btn-baixar-final').classList.remove('hidden');
         };
-        reader.readAsDataURL(file);
-    } else {
-        alert("Formato inválido! Envie apenas imagens .JPG");
-    }
+        ulP.appendChild(li);
+    });
+
+    const ulA = document.getElementById('lista-alunos-atendidos');
+    ulA.innerHTML = "";
+    JSON.parse(localStorage.getItem('bancoAlunosAtendidos')).filter(a => f === "todos" || a.coordId === f).forEach(a => {
+        const li = document.createElement('li');
+        li.innerHTML = `<strong>${a.nome}</strong><br><small>${a.arq} (${a.data})</small>`;
+        ulA.appendChild(li);
+    });
 }
 
-// FUNÇÃO MESTRE ATUALIZADA COM SUCESSO DO GITHUB E DOWNLOAD LOCAL
-async function processarHomologacaoMestre(enviarParaGitHub = false) {
-    if (!documentoSelecionadoParaCarimbo) return;
-    if (!cacheCarimboBase64) return alert("Faça o upload do seu carimbo JPG antes de assinar.");
+async function homologarDocumento() {
+    if (!docFocado || !imgCarimboBase64) return alert("Falta o carimbo JPG!");
 
     try {
-        // 1. Processamento e Injeção do Carimbo Transparente na Última Página
-        const pdfBytes = Uint8Array.from(atob(documentoSelecionadoParaCarimbo.pdfDadosBase64.split(',')[1]), c => c.charCodeAt(0));
-        const imgBytes = Uint8Array.from(atob(cacheCarimboBase64.split(',')[1]), c => c.charCodeAt(0));
+        const pdfB = Uint8Array.from(atob(docFocado.pdf.split(',')[1]), c => c.charCodeAt(0));
+        const imgB = Uint8Array.from(atob(imgCarimboBase64.split(',')[1]), c => c.charCodeAt(0));
 
-        const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
-        const paginas = pdfDoc.getPages();
-        const ultimaPagina = paginas[paginas.length - 1];
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfB);
+        const pgs = pdfDoc.getPages();
+        const ultima = pgs[pgs.length - 1];
 
-        const imgEmbed = await pdfDoc.embedJpg(imgBytes);
-        const dimensoes = imgEmbed.scaleToFit(150, 150);
+        const carimbo = await pdfDoc.embedJpg(imgB);
+        const dim = carimbo.scaleToFit(150, 150);
 
-        ultimaPagina.drawImage(imgEmbed, {
-            x: ultimaPagina.getWidth() - dimensoes.width - 50,
+        ultima.drawImage(carimbo, {
+            x: ultima.getWidth() - dim.width - 50,
             y: 50,
-            width: dimensoes.width,
-            height: dimensoes.height,
+            width: dim.width,
+            height: dim.height,
             opacity: 0.75
         });
 
-        const pdfModificadoBytes = await pdfDoc.save();
-        const nomeArquivoFinal = `HOMOLOGADO_${documentoSelecionadoParaCarimbo.metaAluno.nome.replace(/\s+/g, '_')}_${documentoSelecionadoParaCarimbo.nomeOriginalArquivo.replace(/\s+/g, '_')}`;
+        const modificado = await pdfDoc.save();
+        const blob = new Blob([modificado], { type: "application/pdf" });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `HOMOLOGADO_${docFocado.aluno.nome.replace(/\s/g,'_')}.pdf`;
+        link.click();
 
-        // Converte os bytes gerados em string binária comum
-        let binarioString = "";
-        for (let i = 0; i < pdfModificadoBytes.length; i++) {
-            binarioString += String.fromCharCode(pdfModificadoBytes[i]);
-        }
-        // Converte a string binária para Base64 puro (exigido pelo GitHub API)
-        const base64PuroGitHub = btoa(binarioString);
-
-        // 2. Executa a ação selecionada pelo Coordenador
-        if (enviarParaGitHub) {
-            // Ação GitHub: Envio via API REST em segundo plano
-            const urlApi = `https://api.github.com/repos/${CONFIG.github.dono}/${CONFIG.github.repositorio}/contents/${CONFIG.github.pasta}/${nomeArquivoFinal}`;
-            
-            const payload = {
-                message: `Adicionando documento homologado: ${nomeArquivoFinal}`,
-                content: base64PuroGitHub
-            };
-
-            const resposta = await fetch(urlApi, {
-                method: "PUT",
-                headers: {
-                    "Authorization": `token ${CONFIG.github.token}`,
-                    "Accept": "application/vnd.github.v3+json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (resposta.ok) {
-                alert(`Sucesso! O documento assinado foi enviado diretamente para o repositório do GitHub com o nome:\n${nomeArquivoFinal}`);
-            } else {
-                const erroDados = await resposta.json();
-                console.error("Erro GitHub API:", erroDados);
-                alert("Falha ao enviar para o GitHub. Verifique se o Token e as configurações no topo do script estão corretos.");
-                return; // Interrompe o processo para não remover o arquivo da fila caso dê erro
-            }
-        } else {
-            // Ação Local: Tradicional download físico
-            const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = nomeArquivoFinal;
-            link.click();
-            alert(`Arquivo baixado localmente em segurança!\nNome: ${nomeArquivoFinal}`);
-        }
-
-        // 3. Registra no histórico de Atendidos
-        let atendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos')) || [];
-        const dataAgora = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
-        
-        atendidos.push({
-            coordenadorId: documentoSelecionadoParaCarimbo.coordenadorDestinatarioId,
-            nome: documentoSelecionadoParaCarimbo.metaAluno.nome,
-            curso: documentoSelecionadoParaCarimbo.metaAluno.curso,
-            arquivoHomologado: documentoSelecionadoParaCarimbo.nomeOriginalArquivo,
-            dataAtendimento: dataAgora
-        });
+        // Salva histórico
+        let atendidos = JSON.parse(localStorage.getItem('bancoAlunosAtendidos'));
+        atendidos.push({coordId: docFocado.coordId, nome: docFocado.aluno.nome, arq: docFocado.nomeArq, data: new Date().toLocaleDateString()});
         localStorage.setItem('bancoAlunosAtendidos', JSON.stringify(atendidos));
 
-        // 4. Remove da fila de documentos pendentes
-        let pendentes = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')) || [];
-        pendentes = pendentes.filter(d => d.idDocumento !== documentoSelecionadoParaCarimbo.idDocumento);
+        // Remove pendente
+        let pendentes = JSON.parse(localStorage.getItem('bancoDocumentosEstagio')).filter(d => d.id !== docFocado.id);
         localStorage.setItem('bancoDocumentosEstagio', JSON.stringify(pendentes));
 
-        // 5. Atualiza o painel
-        fecharAreaDePreviewCoordenador();
-        atualizarListasDoPainelCoordenador();
+        docFocado = null;
+        document.getElementById('pdf-preview').classList.add('hidden');
+        document.getElementById('btn-baixar-final').classList.add('hidden');
+        atualizarPainelCoordenador();
+        alert("Sucesso!");
 
-    } catch (err) {
-        console.error(err);
-        alert("Erro crítico no processamento do PDF.");
-    }
+    } catch (e) { alert("Erro ao gerar PDF."); }
 }
