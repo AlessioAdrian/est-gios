@@ -5,8 +5,8 @@ const CONFIG = {
     senhaCoordenador: "1234",
     senhaAdmin: "admin99",
     
-    // 🚨 COLE OU ALTERE O LINK DA SUA PASTA DO ONEDRIVE AQUI EMBAIXO:
-    linkOneDrive: "https://kroton-my.sharepoint.com/:f:/g/personal/alessio_chiuratto_kroton_com_br/IgDrgi-xUVOsRKpukLGp-eakAWEi9RngTMzaDJPrfTB9ctE?email=jose.orodrigues%40cogna.com.br&e=ukuijs"
+    // 🚨 COLE OU ALTERE O LINK DA SUA PASTA DO GOOGLE DRIVE AQUI EMBAIXO:
+    linkGoogleDrive: "https://drive.google.com/drive/folders/EXEMPLO_DA_SUA_PASTA_DE_ESTAGIO"
 };
 
 let viewPendenteAutenticacao = "";
@@ -72,9 +72,9 @@ function inicializarOuvintesDeEventos() {
     if (document.getElementById('coordenador-carimbo-img')) document.getElementById('coordenador-carimbo-img').addEventListener('change', processarUploadImagemCarimbo);
     if (document.getElementById('filtro-coordenador')) document.getElementById('filtro-coordenador').addEventListener('change', atualizarListasDoPainelCoordenador);
 
-    // NOVOS OUVINTES: Ações Compartilhadas de Homologação
-    if (document.getElementById('btn-salvar-onedrive')) {
-        document.getElementById('btn-salvar-onedrive').addEventListener('click', () => processarHomologacaoMestre(true));
+    // Ouvintes de Ações Compartilhadas de Homologação (Google Drive / Download Local)
+    if (document.getElementById('btn-salvar-googledrive')) {
+        document.getElementById('btn-salvar-googledrive').addEventListener('click', () => processarHomologacaoMestre(true));
     }
     if (document.getElementById('btn-baixar-local')) {
         document.getElementById('btn-baixar-local').addEventListener('click', () => processarHomologacaoMestre(false));
@@ -268,8 +268,8 @@ function processarUploadImagemCarimbo(e) {
     }
 }
 
-// FUNÇÃO MESTRE ATUALIZADA COM TRATAMENTO DE ONEDRIVE E DOWNLOAD LOCAL
-async function processarHomologacaoMestre(redirecionarParaOneDrive = false) {
+// FUNÇÃO MESTRE ATUALIZADA COM TRATAMENTO DE GOOGLE DRIVE E DOWNLOAD LOCAL
+async function processarHomologacaoMestre(redirecionarParaGoogleDrive = false) {
     if (!documentoSelecionadoParaCarimbo) return;
     if (!cacheCarimboBase64) return alert("Faça o upload do seu carimbo JPG antes de assinar.");
 
@@ -297,17 +297,17 @@ async function processarHomologacaoMestre(redirecionarParaOneDrive = false) {
         const nomeArquivoFinal = `HOMOLOGADO_${documentoSelecionadoParaCarimbo.metaAluno.nome}_${documentoSelecionadoParaCarimbo.nomeOriginalArquivo}`;
 
         // 2. Executa a ação selecionada pelo Coordenador
-        if (redirecionarParaOneDrive) {
-            // Ação OneDrive: Faz o download e abre a pasta configurada em uma nova aba para o usuário arrastar o arquivo
+        if (redirecionarParaGoogleDrive) {
+            // Ação Google Drive: Faz o download e abre a pasta configurada do Drive em uma nova aba
             const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = nomeArquivoFinal;
             link.click();
             
-            // Abre a pasta específica do seu OneDrive configurada no topo do app
-            window.open(CONFIG.linkOneDrive, '_blank');
-            alert(`Documento assinado com sucesso!\nO download iniciou e a pasta do OneDrive foi aberta em uma nova aba para recebimento do arquivo: ${nomeArquivoFinal}`);
+            // Abre a pasta específica do Google Drive configurada no topo do app
+            window.open(CONFIG.linkGoogleDrive, '_blank');
+            alert(`Documento assinado!\nO download iniciou e a pasta do Google Drive foi aberta para você arrastar o arquivo: ${nomeArquivoFinal}`);
         } else {
             // Ação Local: Apenas baixa o arquivo direto no computador do Coordenador
             const blob = new Blob([pdfModificadoBytes], { type: "application/pdf" });
